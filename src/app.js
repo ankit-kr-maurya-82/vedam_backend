@@ -4,7 +4,8 @@ import cookieParser from "cookie-parser"
 const app = express()
 
 app.use(cors({
-    origin: "https://vedam-fronted.vercel.app",  // allow requests from this origin
+    origin: process.env.CORS_ORIGIN,
+    // allow requests from this origin
     credentials: true,               // allow cookies
 
 }))
