@@ -1,0 +1,33 @@
+import { Router } from "express";
+import { verifyJWT } from "../middlewares/auth.middleware.js";
+import {
+  createPost,
+  deletePost,
+  getAllPosts,
+  getPostById,
+  getPostsByUsername,
+  updatePost,
+} from "../controllers/post.controller.js";
+import { upload } from "../middlewares/multer.middleware.js";
+
+const router = Router();
+
+router.get("/", getAllPosts);
+router.get("/:postId", getPostById);
+router.get("/user/:username", getPostsByUsername);
+
+router.post(
+  "/",
+  verifyJWT,
+  upload.single("media"),
+  createPost
+);
+router.put(
+  "/:postId",
+  verifyJWT,
+  upload.single("media"),
+  updatePost
+);
+router.delete("/:postId", verifyJWT, deletePost);
+
+export default router;
