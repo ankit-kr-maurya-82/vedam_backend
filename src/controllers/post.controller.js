@@ -3,7 +3,6 @@ import { ApiError } from "../utils/ApiError.js";
 import { Post } from "../models/post.model.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import redis from "../db/redis.js";
 
 // ✅ ONLY allow Cloudinary / HTTPS URLs
 const resolveMediaUrl = (mediaPath) => {
@@ -13,7 +12,7 @@ const resolveMediaUrl = (mediaPath) => {
     return mediaPath;
   }
 
-  return null; // ❌ block localhost/blob
+  return null;
 };
 
 // ✅ normalize response
@@ -74,9 +73,6 @@ export const createPost = asyncHandler(async (req, res) => {
     .populate("owner", "fullName username avatar")
     .lean();
 
-  // 🔥 CLEAR CACHE
-  await redis.del("ALL_POSTS_FEED");
-
   res.status(201).json({
     success: true,
     post: normalizePost(populatedPost),
@@ -85,24 +81,9 @@ export const createPost = asyncHandler(async (req, res) => {
 
 
 // ==========================
-// ✅ GET ALL POSTS (FEED)
+// ✅ GET ALL POSTS
 // ==========================
 export const getAllPosts = asyncHandler(async (req, res) => {
-  const CACHE_KEY = "ALL_POSTS_FEED";
-
-  // 🔥 CACHE CHECK
-  const cached = await redis.get(CACHE_KEY);
-
-  if (cached) {
-    console.log("⚡ Redis feed");
-    return res.status(200).json({
-      success: true,
-      posts: JSON.parse(cached),
-      cached: true,
-    });
-  }
-
-  // 🔥 PAGINATION
   const page = parseInt(req.query.page) || 1;
   const limit = 10;
   const skip = (page - 1) * limit;
@@ -117,40 +98,21 @@ export const getAllPosts = asyncHandler(async (req, res) => {
 
   const normalizedPosts = posts.map(normalizePost);
 
-  // 🔥 STORE CACHE
-  await redis.set(CACHE_KEY, JSON.stringify(normalizedPosts), {
-    EX: 60,
-  });
-
-  console.log("🐢 DB feed");
-
   res.status(200).json({
     success: true,
     posts: normalizedPosts,
-    cached: false,
   });
 });
 
 
 // ==========================
-// ✅ GET POSTS BY USER
+// ✅ GET POSTS BY USERNAME
 // ==========================
 export const getPostsByUsername = asyncHandler(async (req, res) => {
   const { username } = req.params;
 
   if (!username?.trim()) {
     throw new ApiError(400, "Username is required");
-  }
-
-  const CACHE_KEY = `USER_POSTS_${username}`;
-
-  const cached = await redis.get(CACHE_KEY);
-  if (cached) {
-    return res.status(200).json({
-      success: true,
-      posts: JSON.parse(cached),
-      cached: true,
-    });
   }
 
   const user = await User.findOne({
@@ -169,14 +131,9 @@ export const getPostsByUsername = asyncHandler(async (req, res) => {
 
   const normalizedPosts = posts.map(normalizePost);
 
-  await redis.set(CACHE_KEY, JSON.stringify(normalizedPosts), {
-    EX: 60,
-  });
-
   res.status(200).json({
     success: true,
     posts: normalizedPosts,
-    cached: false,
   });
 });
 
@@ -187,17 +144,6 @@ export const getPostsByUsername = asyncHandler(async (req, res) => {
 export const getPostById = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
-  const CACHE_KEY = `POST_${postId}`;
-
-  const cached = await redis.get(CACHE_KEY);
-  if (cached) {
-    return res.status(200).json({
-      success: true,
-      post: JSON.parse(cached),
-      cached: true,
-    });
-  }
-
   const post = await Post.findById(postId)
     .populate("owner", "fullName username avatar")
     .lean();
@@ -206,16 +152,9 @@ export const getPostById = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Post not found");
   }
 
-  const normalized = normalizePost(post);
-
-  await redis.set(CACHE_KEY, JSON.stringify(normalized), {
-    EX: 120,
-  });
-
   res.status(200).json({
     success: true,
-    post: normalized,
-    cached: false,
+    post: normalizePost(post),
   });
 });
 
@@ -234,7 +173,7 @@ export const updatePost = asyncHandler(async (req, res) => {
   }
 
   if (String(post.owner) !== String(req.user._id)) {
-    throw new ApiError(403, "You can edit only your own article");
+    throw new ApiError(403, "You can edit only your own post");
   }
 
   if (typeof title === "string") {
@@ -263,10 +202,6 @@ export const updatePost = asyncHandler(async (req, res) => {
     .populate("owner", "fullName username avatar")
     .lean();
 
-  // 🔥 CLEAR CACHE
-  await redis.del("ALL_POSTS_FEED");
-  await redis.del(`POST_${postId}`);
-
   res.status(200).json({
     success: true,
     post: normalizePost(updatedPost),
@@ -287,14 +222,10 @@ export const deletePost = asyncHandler(async (req, res) => {
   }
 
   if (String(post.owner) !== String(req.user._id)) {
-    throw new ApiError(403, "You can delete only your own article");
+    throw new ApiError(403, "You can delete only your own post");
   }
 
   await Post.findByIdAndDelete(postId);
-
-  // 🔥 CLEAR CACHE
-  await redis.del("ALL_POSTS_FEED");
-  await redis.del(`POST_${postId}`);
 
   res.status(200).json({
     success: true,
