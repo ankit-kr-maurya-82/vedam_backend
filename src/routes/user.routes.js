@@ -37,6 +37,17 @@ router.route("/profile").patch(
     updateUserProfile
 )
 
+router.route("/test-upload").post(
+    upload.single("avatar"),
+    (req, res) => {
+        console.log('🧪 TEST UPLOAD:', req.file?.originalname)
+        res.json({ 
+            message: "File received", 
+            file: req.file ? {name: req.file.originalname, size: req.file.size} : null 
+        })
+    }
+)
+
 
 // secure routes
 router.route("/logout").post(verifyJWT, logoutUser)

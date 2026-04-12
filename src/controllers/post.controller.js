@@ -52,8 +52,8 @@ export const createPost = asyncHandler(async (req, res) => {
 
   let mediaUrl = null;
 
-  if (req.file?.path) {
-    const uploadedMedia = await uploadOnCloudinary(req.file.path);
+  if (req.file) {
+    const uploadedMedia = await uploadOnCloudinary(req.file);
 
     if (!uploadedMedia?.url) {
       throw new ApiError(500, "Post media upload failed");
@@ -184,8 +184,8 @@ export const updatePost = asyncHandler(async (req, res) => {
     post.content = content.trim();
   }
 
-  if (req.file?.path) {
-    const uploadedMedia = await uploadOnCloudinary(req.file.path);
+  if (req.file) {
+    const uploadedMedia = await uploadOnCloudinary(req.file);
 
     if (!uploadedMedia?.url) {
       throw new ApiError(500, "Media upload failed");

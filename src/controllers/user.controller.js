@@ -419,61 +419,59 @@ const getPublicUserProfile = asyncHandler(async (req, res) => {
 });
 
 const updateUserProfile = asyncHandler(async (req, res) => {
+  console.log('🔄 [DEBUG] updateUserProfile called');
+  console.log('📋 Body:', req.body);
+  console.log('📁 File:', req.file ? {
+    originalname: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size,
+    bufferLength: req.file.buffer?.length
+  } : 'NO FILE');
   const { fullName, username, bio } = req.body;
   const updates = {};
 
   if (typeof fullName === "string") {
-    const trimmedFullName = fullName.trim();
-    if (!trimmedFullName) {
-      throw new ApiError(400, "Full name cannot be empty");
-    }
-    updates.fullName = trimmedFullName;
+    const trimmed = fullName.trim();
+    if (!trimmed) throw new ApiError(400, "Full name cannot be empty");
+    updates.fullName = trimmed;
   }
 
   if (typeof username === "string") {
-    const normalizedUsername = username.trim().toLowerCase();
-    if (!normalizedUsername) {
-      throw new ApiError(400, "Username cannot be empty");
-    }
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) throw new ApiError(400, "Username cannot be empty");
 
-    const existingUser = await User.findOne({
-      username: normalizedUsername,
+    const exists = await User.findOne({
+      username: normalized,
       _id: { $ne: req.user._id },
     });
 
-    if (existingUser) {
+    if (exists) {
       throw new ApiError(409, "Username already taken");
     }
 
-    updates.username = normalizedUsername;
+    updates.username = normalized;
   }
 
   if (typeof bio === "string") {
     updates.bio = bio.trim();
   }
 
-  const avatarLocalPath =
-    req.file?.path ||
-    (req.files &&
-    Array.isArray(req.files.avatar) &&
-    req.files.avatar.length > 0
-      ? req.files.avatar[0].path
-      : undefined);
+  // ✅ MEMORY STORAGE FIX (IMPORTANT)
+  const avatarFile = req.file;
 
-  if (avatarLocalPath) {
-    let avatar;
-    try {
-      avatar = await uploadOnCloudinary(avatarLocalPath);
-    } catch (error) {
-      throw new ApiError(
-        500,
-        error?.message || "Avatar upload failed"
-      );
+  if (avatarFile) {
+    console.log('☁️ [DEBUG] Uploading to Cloudinary...', avatarFile.originalname);
+    const uploadedAvatar = await uploadOnCloudinary(avatarFile);
+    console.log('✅ [DEBUG] Cloudinary result:', uploadedAvatar ? 'SUCCESS' : 'FAILED', uploadedAvatar?.url);
+    
+    const avatar = uploadedAvatar;
+    if (!avatar) {
+      throw new ApiError(500, "Avatar upload failed");
     }
-
     if (!avatar?.url) {
       throw new ApiError(500, "Avatar upload failed");
     }
+
     updates.avatar = avatar.url;
   }
 
@@ -483,13 +481,8 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
   const updatedUser = await User.findByIdAndUpdate(
     req.user._id,
-    {
-      $set: updates,
-    },
-    {
-      new: true,
-      runValidators: true,
-    }
+    { $set: updates },
+    { new: true, runValidators: true }
   )
     .select("-password -refreshToken")
     .populate("followers", "username fullName avatar")

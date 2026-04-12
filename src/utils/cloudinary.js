@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { v2 as cloudinary } from "cloudinary";
 
 cloudinary.config({
@@ -7,22 +6,28 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const uploadOnCloudinary = async (filePath) => {
-  try {
-    if (!filePath) return null;
 
-    const result = await cloudinary.uploader.upload(filePath, {
-      resource_type: "auto",
-      folder: "posts",
-    });
-
-    return {
-      url: result.secure_url,
-      public_id: result.public_id,
-    };
-  } catch (error) {
-    throw new Error(error.message || "Cloudinary upload failed");
+export const uploadOnCloudinary = async (file) => {
+  console.log('☁️ [CLOUDINARY] uploadOnCloudinary called, buffer:', file?.buffer?.length);
+  if (!file?.buffer) {
+    console.log('⚠️ [CLOUDINARY] No buffer provided');
+    return null;
   }
-};
 
-export { uploadOnCloudinary };
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      {
+        folder: "avatars",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+
+        resolve({
+          url: result.secure_url,
+          public_id: result.public_id,
+        });
+      }
+    ).end(file.buffer);
+  });
+};
