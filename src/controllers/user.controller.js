@@ -169,47 +169,62 @@ const registerUser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { email, username, password } = req.body;
 
+  console.log("📩 Login Body:", req.body);
+
+  // ✅ validation
   if (!email && !username) {
     throw new ApiError(400, "Email or username required");
   }
 
+  // ✅ find user
   const user = await User.findOne({
     $or: [{ email }, { username }],
   });
+
+  console.log("👤 User found:", user);
 
   if (!user) {
     throw new ApiError(404, "User not found");
   }
 
+  // ✅ check password
   const isPasswordValid = await user.isPasswordCorrect(password);
+
+  console.log("🔑 Password valid:", isPasswordValid);
+
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid credentials");
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id
-  );
+  // ✅ generate tokens
+  const { accessToken, refreshToken } =
+    await generateAccessAndRefreshTokens(user._id);
 
+  // ✅ remove sensitive data
   const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
+  // ✅ FIX: cookie for local + production
   const options = {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
   };
 
+  // ✅ FINAL RESPONSE (IMPORTANT)
   return res
     .status(200)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
-    .json(
-      new ApiResponse(
-        200,
-        { user: loggedInUser, accessToken, refreshToken },
-        "User logged in successfully"
-      )
-    );
+    .json({
+      success: true,
+      data: {
+        user: loggedInUser,
+        accessToken,
+        refreshToken,
+      },
+      message: "User logged in successfully",
+    });
 });
 
 const socialLoginUser = asyncHandler(async (req, res) => {

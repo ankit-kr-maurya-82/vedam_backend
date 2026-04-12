@@ -3,7 +3,7 @@ dotenv.config();
 
 import connectMongo from "./db/index.js";
 import { app } from "./app.js";
-import "./db/redis.js"; // auto connect Redis
+// import "./db/redis.js"; // auto connect Redis
 
 const startServer = async () => {
   try {

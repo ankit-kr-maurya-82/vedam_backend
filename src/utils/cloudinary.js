@@ -7,28 +7,19 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const uploadOnCloudinary = async (fileBuffer) => {
+const uploadOnCloudinary = async (filePath) => {
   try {
-    if (!fileBuffer) return null;
+    if (!filePath) return null;
 
-    return new Promise((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream(
-          {
-            resource_type: "auto",
-            folder: "posts",
-          },
-          (error, result) => {
-            if (error) return reject(error);
-
-            resolve({
-              url: result.secure_url,
-              public_id: result.public_id,
-            });
-          }
-        )
-        .end(fileBuffer);
+    const result = await cloudinary.uploader.upload(filePath, {
+      resource_type: "auto",
+      folder: "posts",
     });
+
+    return {
+      url: result.secure_url,
+      public_id: result.public_id,
+    };
   } catch (error) {
     throw new Error(error.message || "Cloudinary upload failed");
   }

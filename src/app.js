@@ -12,25 +12,22 @@ const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",")
   : [];
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    console.log("🌐 Origin:", origin);
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      console.log("🌐 Origin:", origin);
 
-    // allow Postman / server-to-server
-    if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true);
 
-    // allow frontend URLs
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
 
-    // ❌ block others
-    return callback(new Error("❌ Not allowed by CORS"));
-  },
-  credentials: true,
-};
-
-app.use(cors(corsOptions)); // ✅ ONLY CORS needed
+      return callback(null, true); // temp allow
+    },
+    credentials: true,
+  })
+);
 
 /* =========================
    ✅ MIDDLEWARES
@@ -72,9 +69,5 @@ app.use((err, req, res, next) => {
     errors: err?.errors || [],
   });
 });
-
-/* =========================
-   ✅ EXPORT
-========================= */
 
 export { app };
