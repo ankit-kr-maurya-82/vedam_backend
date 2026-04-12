@@ -3,24 +3,20 @@ import { ApiError } from "../utils/ApiError.js";
 import { Post } from "../models/post.model.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import redis from "../db/redis.js";
 
+// ✅ ONLY allow Cloudinary / HTTPS URLs
 const resolveMediaUrl = (mediaPath) => {
-  if (!mediaPath) {
-    return null;
-  }
+  if (!mediaPath) return null;
 
   if (/^https?:\/\//i.test(mediaPath)) {
     return mediaPath;
   }
 
-  const normalizedPath = String(mediaPath)
-    .replace(/\\/g, "/")
-    .replace(/^public\//i, "")
-    .replace(/^\/+/, "");
-
-  return `http://localhost:8000/${normalizedPath}`;
+  return null; // ❌ block localhost/blob
 };
 
+// ✅ normalize response
 const normalizePost = (post) => ({
   id: String(post._id),
   _id: String(post._id),
@@ -36,12 +32,18 @@ const normalizePost = (post) => ({
   username: post.owner?.username || "unknown_user",
   fullName: post.owner?.fullName || "Unknown User",
   avatar: post.owner?.avatar || "",
-  authorId: post.owner?._id ? String(post.owner._id) : String(post.owner),
+  authorId: post.owner?._id
+    ? String(post.owner._id)
+    : String(post.owner),
   commentsCount: post.commentsCount || 0,
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
 });
 
+
+// ==========================
+// ✅ CREATE POST
+// ==========================
 export const createPost = asyncHandler(async (req, res) => {
   const { title, content } = req.body;
 
@@ -50,11 +52,14 @@ export const createPost = asyncHandler(async (req, res) => {
   }
 
   let mediaUrl = null;
+
   if (req.file?.path) {
     const uploadedMedia = await uploadOnCloudinary(req.file.path);
+
     if (!uploadedMedia?.url) {
       throw new ApiError(500, "Post media upload failed");
     }
+
     mediaUrl = uploadedMedia.url;
   }
 
@@ -65,10 +70,12 @@ export const createPost = asyncHandler(async (req, res) => {
     owner: req.user._id,
   });
 
-  const populatedPost = await Post.findById(post._id).populate(
-    "owner",
-    "fullName username avatar"
-  );
+  const populatedPost = await Post.findById(post._id)
+    .populate("owner", "fullName username avatar")
+    .lean();
+
+  // 🔥 CLEAR CACHE
+  await redis.del("ALL_POSTS_FEED");
 
   res.status(201).json({
     success: true,
@@ -76,11 +83,74 @@ export const createPost = asyncHandler(async (req, res) => {
   });
 });
 
+
+// ==========================
+// ✅ GET ALL POSTS (FEED)
+// ==========================
+export const getAllPosts = asyncHandler(async (req, res) => {
+  const CACHE_KEY = "ALL_POSTS_FEED";
+
+  // 🔥 CACHE CHECK
+  const cached = await redis.get(CACHE_KEY);
+
+  if (cached) {
+    console.log("⚡ Redis feed");
+    return res.status(200).json({
+      success: true,
+      posts: JSON.parse(cached),
+      cached: true,
+    });
+  }
+
+  // 🔥 PAGINATION
+  const page = parseInt(req.query.page) || 1;
+  const limit = 10;
+  const skip = (page - 1) * limit;
+
+  const posts = await Post.find({})
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .select("title content media owner createdAt")
+    .populate("owner", "fullName username avatar")
+    .lean();
+
+  const normalizedPosts = posts.map(normalizePost);
+
+  // 🔥 STORE CACHE
+  await redis.set(CACHE_KEY, JSON.stringify(normalizedPosts), {
+    EX: 60,
+  });
+
+  console.log("🐢 DB feed");
+
+  res.status(200).json({
+    success: true,
+    posts: normalizedPosts,
+    cached: false,
+  });
+});
+
+
+// ==========================
+// ✅ GET POSTS BY USER
+// ==========================
 export const getPostsByUsername = asyncHandler(async (req, res) => {
   const { username } = req.params;
 
   if (!username?.trim()) {
     throw new ApiError(400, "Username is required");
+  }
+
+  const CACHE_KEY = `USER_POSTS_${username}`;
+
+  const cached = await redis.get(CACHE_KEY);
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      posts: JSON.parse(cached),
+      cached: true,
+    });
   }
 
   const user = await User.findOne({
@@ -93,50 +163,72 @@ export const getPostsByUsername = asyncHandler(async (req, res) => {
 
   const posts = await Post.find({ owner: user._id })
     .sort({ createdAt: -1 })
-    .populate("owner", "fullName username avatar");
+    .limit(20)
+    .populate("owner", "fullName username avatar")
+    .lean();
 
   const normalizedPosts = posts.map(normalizePost);
+
+  await redis.set(CACHE_KEY, JSON.stringify(normalizedPosts), {
+    EX: 60,
+  });
 
   res.status(200).json({
     success: true,
     posts: normalizedPosts,
+    cached: false,
   });
 });
 
-export const getAllPosts = asyncHandler(async (_req, res) => {
-  const posts = await Post.find({})
-    .sort({ createdAt: -1 })
-    .populate("owner", "fullName username avatar");
 
-  res.status(200).json({
-    success: true,
-    posts: posts.map(normalizePost),
-  });
-});
-
+// ==========================
+// ✅ GET SINGLE POST
+// ==========================
 export const getPostById = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
-  const post = await Post.findById(postId).populate(
-    "owner",
-    "fullName username avatar"
-  );
+  const CACHE_KEY = `POST_${postId}`;
+
+  const cached = await redis.get(CACHE_KEY);
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      post: JSON.parse(cached),
+      cached: true,
+    });
+  }
+
+  const post = await Post.findById(postId)
+    .populate("owner", "fullName username avatar")
+    .lean();
 
   if (!post) {
     throw new ApiError(404, "Post not found");
   }
 
+  const normalized = normalizePost(post);
+
+  await redis.set(CACHE_KEY, JSON.stringify(normalized), {
+    EX: 120,
+  });
+
   res.status(200).json({
     success: true,
-    post: normalizePost(post),
+    post: normalized,
+    cached: false,
   });
 });
 
+
+// ==========================
+// ✅ UPDATE POST
+// ==========================
 export const updatePost = asyncHandler(async (req, res) => {
   const { postId } = req.params;
   const { title, content, mediaUrl } = req.body;
 
   const post = await Post.findById(postId);
+
   if (!post) {
     throw new ApiError(404, "Post not found");
   }
@@ -155,9 +247,11 @@ export const updatePost = asyncHandler(async (req, res) => {
 
   if (req.file?.path) {
     const uploadedMedia = await uploadOnCloudinary(req.file.path);
+
     if (!uploadedMedia?.url) {
-      throw new ApiError(500, "Post media upload failed");
+      throw new ApiError(500, "Media upload failed");
     }
+
     post.media = uploadedMedia.url;
   } else if (typeof mediaUrl === "string") {
     post.media = mediaUrl || null;
@@ -165,21 +259,29 @@ export const updatePost = asyncHandler(async (req, res) => {
 
   await post.save();
 
-  const populatedPost = await Post.findById(post._id).populate(
-    "owner",
-    "fullName username avatar"
-  );
+  const updatedPost = await Post.findById(post._id)
+    .populate("owner", "fullName username avatar")
+    .lean();
+
+  // 🔥 CLEAR CACHE
+  await redis.del("ALL_POSTS_FEED");
+  await redis.del(`POST_${postId}`);
 
   res.status(200).json({
     success: true,
-    post: normalizePost(populatedPost),
+    post: normalizePost(updatedPost),
   });
 });
 
+
+// ==========================
+// ✅ DELETE POST
+// ==========================
 export const deletePost = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
   const post = await Post.findById(postId);
+
   if (!post) {
     throw new ApiError(404, "Post not found");
   }
@@ -189,6 +291,10 @@ export const deletePost = asyncHandler(async (req, res) => {
   }
 
   await Post.findByIdAndDelete(postId);
+
+  // 🔥 CLEAR CACHE
+  await redis.del("ALL_POSTS_FEED");
+  await redis.del(`POST_${postId}`);
 
   res.status(200).json({
     success: true,
