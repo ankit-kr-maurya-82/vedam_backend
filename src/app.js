@@ -8,30 +8,29 @@ const app = express();
    ✅ CORS CONFIG (FINAL)
 ========================= */
 
-// multiple origins from .env
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",")
   : [];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    console.log("Origin:", origin);
+    console.log("🌐 Origin:", origin);
 
-    // allow server-to-server / Postman
+    // allow Postman / server-to-server
     if (!origin) return callback(null, true);
 
-    // allow listed origins
+    // allow frontend URLs
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    return callback(new Error("Not allowed by CORS"));
+    // ❌ block others
+    return callback(new Error("❌ Not allowed by CORS"));
   },
   credentials: true,
 };
 
-app.use(cors(corsOptions));
-// app.options("/*", cors(corsOptions)); // preflight support
+app.use(cors(corsOptions)); // ✅ ONLY CORS needed
 
 /* =========================
    ✅ MIDDLEWARES
@@ -39,21 +38,17 @@ app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static("public")); // static files
+app.use(express.static("public"));
 app.use(cookieParser());
 
 /* =========================
-   ✅ ROUTES IMPORT
+   ✅ ROUTES
 ========================= */
 
 import userRouter from "./routes/user.routes.js";
 import postRouter from "./routes/post.routes.js";
 import commentRouter from "./routes/comment.routes.js";
 import searchRouter from "./routes/search.routes.js";
-
-/* =========================
-   ✅ ROUTES
-========================= */
 
 app.get("/", (req, res) => {
   res.send("Social Media App Home Page 🚀");
@@ -69,7 +64,7 @@ app.use("/api/v1/search", searchRouter);
 ========================= */
 
 app.use((err, req, res, next) => {
-  console.error("Error:", err.message);
+  console.error("🔥 Error:", err);
 
   res.status(err?.statusCode || 500).json({
     success: false,
