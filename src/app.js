@@ -10,24 +10,22 @@ const app = express();
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://vedam-frontend.vercel.app", // apna frontend URL
+  "http://localhost:3000",
+  "https://vedam-frontend.vercel.app",
+  "https://vedam-fronted.vercel.app",
+  "https://vedam.vercel.app"
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
       console.log("🌐 Origin:", origin);
-
-      // allow Postman / server-to-server
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(null, false);
+      // Vercel + Local + any origin (development)
+      return callback(null, true);
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   })
 );
 
