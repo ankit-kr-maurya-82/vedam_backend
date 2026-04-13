@@ -497,6 +497,26 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   );
 });
 
+export const updateSelfRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+
+    if (!role) {
+      return res.status(400).json({ message: "Role is required" });
+    }
+
+    req.user.role = role;
+    await req.user.save();
+
+    res.json({
+      message: "Role updated successfully",
+      user: req.user
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating role" });
+  }
+};
+
 const toggleFollowUser = asyncHandler(async (req, res) => {
   const { username } = req.params;
   const currentUserId = String(req.user._id);
