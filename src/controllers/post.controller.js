@@ -88,7 +88,13 @@ export const getAllPosts = asyncHandler(async (req, res) => {
   const limit = 10;
   const skip = (page - 1) * limit;
 
-  const posts = await Post.find({})
+  const isAdmin = req.user?.role === 'admin';
+  const filter = isAdmin ? {} : { 
+    isAdminOnly: { $ne: true },
+    'owner.role': { $ne: 'admin' }
+  };
+
+  const posts = await Post.find(filter)
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)

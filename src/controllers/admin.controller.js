@@ -3,11 +3,13 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
 import { Post } from "../models/post.model.js";
+import { Comment } from "../models/comment.model.js";
 
 const getAdminStats = asyncHandler(async (req, res) => {
-  const [userCount, postCount] = await Promise.all([
+  const [userCount, postCount, commentCount] = await Promise.all([
     User.countDocuments(),
-    Post.countDocuments()
+    Post.countDocuments(),
+    Comment.countDocuments()
   ]);
 
   const recentUsers = await User.find()
@@ -25,6 +27,7 @@ const getAdminStats = asyncHandler(async (req, res) => {
     new ApiResponse(200, {
       totalUsers: userCount,
       totalPosts: postCount,
+      totalComments: commentCount,
       recentUsers,
       recentPosts
     })
