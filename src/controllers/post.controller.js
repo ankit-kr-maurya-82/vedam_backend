@@ -121,8 +121,10 @@ export const getPostsByUsername = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Username is required");
   }
 
+  const isAdmin = req.user?.role === 'admin';
   const user = await User.findOne({
     username: username.trim().toLowerCase(),
+    ...(isAdmin ? {} : { role: { $ne: 'admin' } })
   }).select("_id");
 
   if (!user) {

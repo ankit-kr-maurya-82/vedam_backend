@@ -399,8 +399,12 @@ const getPublicUserProfile = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Username is required");
   }
 
+  const isAdmin = req.user?.role === 'admin';
+  const filter = isAdmin ? {} : { role: { $ne: 'admin' } };
+
   const profileUser = await User.findOne({
     username: username.trim().toLowerCase(),
+    ...filter
   })
     .select("-password -refreshToken")
     .populate("followers", "username fullName avatar")
