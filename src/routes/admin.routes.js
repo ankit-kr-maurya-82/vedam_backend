@@ -19,7 +19,7 @@ router.use(verifyJWT);
 
 router.get("/stats", checkAdmin, getAdminStats);
 router.get("/users", checkAdmin, getUsersList);
-router.get("/users/:id", checkAdmin, getAdminUserDetail);
+router.get("/user/:id", checkAdmin, getAdminUserDetail);
 router.delete("/users/:id", checkAdmin, deleteUser);
 
 router.get("/posts", checkAdmin, getPostsList);
