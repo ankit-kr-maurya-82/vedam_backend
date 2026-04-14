@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { ADMIN_ACCESS_KEY } from "../constants.js";
 
 const toRelationshipList = (items = []) =>
   items.map((item) => ({
@@ -88,9 +89,8 @@ const resolveUniqueUsername = async (input) => {
 
 const registerUser = asyncHandler(async (req, res) => {
  
-    // 1. get user details from fronted
-    const { fullName, email, username, password } = req.body;
-    // console.log("email: ",email);
+    // 1. get user details from frontend
+    const { fullName, email, username, password, adminAccessKey } = req.body;
 
     // 2. validation - not empty
     if (
@@ -98,9 +98,6 @@ const registerUser = asyncHandler(async (req, res) => {
         (field) => field?.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
-    // if(fullName===""){
-    //     throw new ApiError(400, "fullName is required")
-    // }
 
     // 3. check if user already exists: username, email
     const existedUser = await User.findOne({
@@ -114,12 +111,7 @@ const registerUser = asyncHandler(async (req, res) => {
       });
     }
 
-    // console.log(req.files);
-
-    // 4. check for images, check for avatar
-    // const avatarLocalPath = req.files?.avatar[0]?.path;
-    // const coverImageLocalPath = req.files?.coverImage[0].coverImage?.path;
-
+    // 4. check for images
     let avatarLocalPath;
     if (
       req.files &&
@@ -137,11 +129,20 @@ const registerUser = asyncHandler(async (req, res) => {
       coverImageLocalPath = req.files.coverImage[0].path;
     }
 
-    // 5. upload them to cloudinary, avatar
+    // 5. upload to cloudinary
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
-    // 6.create a object - create entry in db
+    // 6. create user
+    // Admin register with key
+    let role = "user";
+    if (adminAccessKey) {
+      if (adminAccessKey !== ADMIN_ACCESS_KEY) {
+        throw new ApiError(401, "Invalid admin access key");
+      }
+      role = "admin";
+    }
+
     const user = await User.create({
       fullName,
       avatar: avatar?.url || "",
@@ -149,26 +150,33 @@ const registerUser = asyncHandler(async (req, res) => {
       email,
       password,
       username: username.toLowerCase(),
-      role: "user"
+      role
     });
 
     const createdUser = await User.findById(user._id).select(
       "-password -refreshToken"
     );
 
-    if (!createdUser) {
-      throw new ApiError(500, "Something went wrong while registering the user")
-     
-    }
-
     return res
       .status(201)
-      .json(new ApiResponse(200, createdUser, "User registered successfully"));
-  
+      .json(new ApiResponse(200, createdUser, "User registered successfully"));  
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  const { email, username, password } = req.body;
+  const { email, username, password, adminAccessKey } = req.body;
+
+  // Admin login with key
+  if (adminAccessKey) {
+    if (adminAccessKey !== ADMIN_ACCESS_KEY) {
+      throw new ApiError(401, "Invalid admin access key");
+    }
+    const adminUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (adminUser && adminUser.role === 'admin') {
+      // Already admin
+    } else {
+      throw new ApiError(403, "Admin access denied");
+    }
+  }
 
   console.log("📩 Login Body:", req.body);
 
