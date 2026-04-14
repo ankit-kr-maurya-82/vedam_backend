@@ -73,6 +73,15 @@ const getUsersList = asyncHandler(async (req, res) => {
 const deleteUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   
+  const targetUser = await User.findById(id);
+  if (!targetUser) {
+    throw new ApiError(404, "User not found");
+  }
+  
+  if (targetUser.role === 'admin') {
+    throw new ApiError(403, "Cannot delete admin users");
+  }
+  
   await User.findByIdAndDelete(id);
   
   return res.json(
