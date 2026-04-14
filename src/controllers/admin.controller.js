@@ -70,6 +70,28 @@ const getUsersList = asyncHandler(async (req, res) => {
   );
 });
 
+const getAdminUserDetail = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
+  const user = await User.findById(id).select("-password -refreshToken");
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  
+  const [postsCount, followersCount] = await Promise.all([
+    Post.countDocuments({ authorId: id }),
+    User.countDocuments({ following: id })
+  ]);
+  
+  return res.json(
+    new ApiResponse(200, {
+      user,
+      postsCount,
+      followersCount
+    })
+  );
+});
+
 const deleteUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   
@@ -132,6 +154,7 @@ const deletePost = asyncHandler(async (req, res) => {
 export {
   getAdminStats,
   getUsersList,
+  getAdminUserDetail,
   deleteUser,
   getPostsList,
   deletePost
