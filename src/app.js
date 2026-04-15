@@ -19,7 +19,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      console.log("🌐 Origin:", origin);
+      // console.log("🌐 Origin:", origin);
       // Vercel + Local + any origin (development)
       return callback(null, true);
     },
