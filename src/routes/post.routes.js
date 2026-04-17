@@ -6,6 +6,7 @@ import {
   getAllPosts,
   getPostById,
   getPostsByUsername,
+  toggleLikePost,
   updatePost,
 } from "../controllers/post.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -29,5 +30,6 @@ router.put(
   updatePost
 );
 router.delete("/:postId", verifyJWT, deletePost);
+router.post("/:postId/like", verifyJWT, toggleLikePost);
 
 export default router;

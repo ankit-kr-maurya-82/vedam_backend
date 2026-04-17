@@ -34,6 +34,7 @@ const normalizePost = (post) => ({
   authorId: post.owner?._id
     ? String(post.owner._id)
     : String(post.owner),
+  likesCount: post.likes?.length || 0,
   commentsCount: post.commentsCount || 0,
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
@@ -238,5 +239,45 @@ export const deletePost = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Post deleted successfully",
+  });
+});
+
+// ==========================
+// ✅ TOGGLE LIKE POST
+// ==========================
+export const toggleLikePost = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user._id;
+
+  const post = await Post.findById(postId);
+  if (!post) {
+    throw new ApiError(404, "Post not found");
+  }
+
+  const userLikedIndex = post.likes.findIndex(likeId => likeId.toString() === userId.toString());
+  let liked;
+  if (userLikedIndex > -1) {
+    // Unlike
+    post.likes.splice(userLikedIndex, 1);
+    liked = false;
+  } else {
+    // Like
+    post.likes.push(userId);
+    liked = true;
+  }
+
+  await post.save();
+
+  const populatedPost = await Post.findById(postId)
+    .populate("owner", "fullName username avatar")
+    .lean();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      likesCount: post.likes.length,
+      liked,
+    },
+    post: normalizePost(populatedPost),
   });
 });
