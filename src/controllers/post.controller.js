@@ -16,7 +16,11 @@ const resolveMediaUrl = (mediaPath) => {
 };
 
 // ✅ normalize response
-const normalizePost = (post) => ({
+const normalizePost = (post, currentUserId = null) => {
+  const likeIds = Array.isArray(post.likes) ? post.likes : [];
+  const normalizedCurrentUserId = currentUserId ? String(currentUserId) : null;
+
+  return {
   id: String(post._id),
   _id: String(post._id),
   title: post.title || "Untitled Post",
@@ -34,11 +38,15 @@ const normalizePost = (post) => ({
   authorId: post.owner?._id
     ? String(post.owner._id)
     : String(post.owner),
-  likesCount: post.likes?.length || 0,
+  likesCount: likeIds.length,
+  liked: normalizedCurrentUserId
+    ? likeIds.some((likeId) => String(likeId) === normalizedCurrentUserId)
+    : false,
   commentsCount: post.commentsCount || 0,
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
-});
+  };
+};
 
 
 // ==========================
@@ -76,7 +84,7 @@ export const createPost = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    post: normalizePost(populatedPost),
+    post: normalizePost(populatedPost, req.user?._id),
   });
 });
 
@@ -99,11 +107,13 @@ export const getAllPosts = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
-    .select("title content media owner createdAt")
+    .select("title content media owner likes commentsCount createdAt updatedAt")
     .populate("owner", "fullName username avatar")
     .lean();
 
-  const normalizedPosts = posts.map(normalizePost);
+  const normalizedPosts = posts.map((post) =>
+    normalizePost(post, req.user?._id)
+  );
 
   res.status(200).json({
     success: true,
@@ -138,7 +148,9 @@ export const getPostsByUsername = asyncHandler(async (req, res) => {
     .populate("owner", "fullName username avatar")
     .lean();
 
-  const normalizedPosts = posts.map(normalizePost);
+  const normalizedPosts = posts.map((post) =>
+    normalizePost(post, req.user?._id)
+  );
 
   res.status(200).json({
     success: true,
@@ -163,7 +175,7 @@ export const getPostById = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    post: normalizePost(post),
+    post: normalizePost(post, req.user?._id),
   });
 });
 
@@ -213,7 +225,7 @@ export const updatePost = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    post: normalizePost(updatedPost),
+    post: normalizePost(updatedPost, req.user?._id),
   });
 });
 
@@ -278,6 +290,6 @@ export const toggleLikePost = asyncHandler(async (req, res) => {
       likesCount: post.likes.length,
       liked,
     },
-    post: normalizePost(populatedPost),
+    post: normalizePost(populatedPost, req.user?._id),
   });
 });

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { optionalVerifyJWT, verifyJWT } from "../middlewares/auth.middleware.js";
 import {
   createPost,
   deletePost,
@@ -13,9 +13,9 @@ import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
-router.get("/", getAllPosts);
-router.get("/:postId", getPostById);
-router.get("/user/:username", getPostsByUsername);
+router.get("/", optionalVerifyJWT, getAllPosts);
+router.get("/:postId", optionalVerifyJWT, getPostById);
+router.get("/user/:username", optionalVerifyJWT, getPostsByUsername);
 
 router.post(
   "/",
