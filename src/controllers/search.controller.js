@@ -37,12 +37,17 @@ export const globalSearch = asyncHandler(async (req, res) => {
     _id: String(post._id),
     title: post.title || "Untitled Post",
     content: post.content,
-    media: post.media
-      ? {
-          type: /\.(mp4|webm|ogg)$/i.test(post.media) ? "video" : "image",
-          url: post.media,
-        }
-      : null,
+    media: post.media ? {
+      type: /\.(mp4|webm|ogg)$/i.test(post.media) ? "video" : "image",
+      url: post.media,
+    } : null,
+    formattedDate: new Date(post.createdAt).toLocaleString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    }),
     tags: [],
     username: post.owner?.username || "unknown_user",
     fullName: post.owner?.fullName || "Unknown User",
