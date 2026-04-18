@@ -6,6 +6,14 @@
       "use": "@vercel/node"
     }
   ],
+  "functions": {
+    "src/index.js": {
+      "maxDuration": 30,
+      "bodyParser": {
+        "sizeLimit": "25mb"
+      }
+    }
+  },
   "routes": [
     {
       "src": "/(.*)",

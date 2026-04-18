@@ -12,7 +12,6 @@ const postSchema = new mongoose.Schema(
       trim: true,
       maxlength: 100000
     },
-
     media: {
       type: String, // Cloudinary URL (image or video)
       default: null,
