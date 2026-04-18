@@ -10,7 +10,7 @@ const postSchema = new mongoose.Schema(
     content: {
       type: String,
       trim: true,
-      maxlength: 100000
+      maxlength: 100000000000000
     },
     media: {
       type: String, // Cloudinary URL (image or video)
