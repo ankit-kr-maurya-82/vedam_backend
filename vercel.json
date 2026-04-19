@@ -1,8 +1,6 @@
 {
-  "version": 2,
   "functions": {
     "src/index.js": {
-      "runtime": "@vercel/node",
       "maxDuration": 30
     }
   },
