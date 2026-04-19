@@ -1,45 +1,25 @@
 import mongoose from "mongoose";
-import dns from "dns";
 
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
+let isConnected = false;
 
-let cachedConnection = null;
-let pendingConnection = null;
+async function connectDB() {
+  if (isConnected) return;
 
-const connectDB = async () => {
-  if (cachedConnection) return cachedConnection;
-  if (pendingConnection) return pendingConnection;
+  await mongoose.connect(process.env.MONGODB_URI, {
+    dbName: "vedam",
+  });
 
-  if (!process.env.MONGODB_URI) {
-    throw new Error("MONGODB_URI is not set in environment");
+  isConnected = true;
+  console.log("MongoDB connected");
+}
+
+export default async function handler(req, res) {
+  try {
+    await connectDB();
+
+    return res.status(200).json({ message: "DB Connected" });
+  } catch (err) {
+    console.error("ERROR:", err);
+    return res.status(500).json({ error: err.message });
   }
-
-  pendingConnection = mongoose
-.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 30000,
-      bufferCommands: false,
-      bufferTimeoutMS: 600000,
-    })
-    .then((connectionInstance) => {
-      cachedConnection = connectionInstance;
-      console.log(
-        `MongoDB connected. DB HOST: ${connectionInstance.connection.host}`
-      );
-      return connectionInstance;
-    })
-    .catch((error) => {
-      pendingConnection = null;
-
-      if (error?.name === "MongooseServerSelectionError") {
-        console.error(
-          "MongoDB Atlas connection failed. Check Network Access IP whitelist, cluster status, and DB credentials."
-        );
-      }
-
-      throw error;
-    });
-
-  return pendingConnection;
-};
-
-export default connectDB;
+}
