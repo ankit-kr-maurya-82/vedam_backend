@@ -52,6 +52,7 @@ import commentRouter from "./routes/comment.routes.js";
 import searchRouter from "./routes/search.routes.js";
 import adminRouter from "./routes/admin.routes.js";
 import adminSignupRouter from "./routes/adminSignup.routes.js";
+import contactRouter from "./routes/contact.routes.js";
 
 app.get("/", (req, res) => {
   res.send("Social Media App Home Page 🚀");
@@ -63,6 +64,7 @@ app.use("/api/v1/posts", postRouter);
 app.use("/api/v1/comments", commentRouter);
 app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/contact", contactRouter);
 /* =========================
    ❌ ERROR HANDLER
 ========================= */
