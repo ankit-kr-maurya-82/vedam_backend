@@ -15,7 +15,7 @@ export default app;
 
 // Local server only
 if (typeof process.env.VERCEL === "undefined") {
-  const connectMongo = await import("./db/index.js").then(m => m.default || m.connectMongo);
+const connectMongo = (await import("./db/index.js")).default;
   connectMongo();
   const PORT = process.env.PORT || 8000;
   app.listen(PORT, () => {
