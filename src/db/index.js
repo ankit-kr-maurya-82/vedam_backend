@@ -15,8 +15,10 @@ const connectDB = async () => {
   }
 
   pendingConnection = mongoose
-    .connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
+.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 30000,
+      bufferCommands: false,
+      bufferTimeoutMS: 600000,
     })
     .then((connectionInstance) => {
       cachedConnection = connectionInstance;
