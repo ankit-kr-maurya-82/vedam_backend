@@ -13,13 +13,4 @@ async function connectDB() {
   console.log("MongoDB connected");
 }
 
-export default async function handler(req, res) {
-  try {
-    await connectDB();
-
-    return res.status(200).json({ message: "DB Connected" });
-  } catch (err) {
-    console.error("ERROR:", err);
-    return res.status(500).json({ error: err.message });
-  }
-}
+export default connectDB;
