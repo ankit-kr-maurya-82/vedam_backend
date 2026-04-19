@@ -67,7 +67,6 @@ app.use("/api/v1/admin", adminRouter);
 /* =========================
    ❌ ERROR HANDLER
 ========================= */
-
 app.use((err, req, res, next) => {
   console.error("🔥 Error:", err.message);
 
