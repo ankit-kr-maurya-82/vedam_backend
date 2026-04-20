@@ -58,6 +58,12 @@ const slugifyUsername = (value = "") =>
     .replace(/^_+|_+$/g, "")
     .slice(0, 20);
 
+const normalizeEmail = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const normalizeUsername = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
 const buildCandidateUsernames = ({ username, email, fullName }) => {
   const fromUsername = slugifyUsername(username || "");
   const fromEmail = slugifyUsername(email?.split("@")[0] || "");
@@ -90,11 +96,21 @@ const resolveUniqueUsername = async (input) => {
 const registerUser = asyncHandler(async (req, res) => {
  
     // 1. get user details from frontend
-    const { fullName, email, username, password, adminAccessKey } = req.body;
+    const {
+      fullName,
+      email: rawEmail,
+      username: rawUsername,
+      password,
+      adminAccessKey
+    } = req.body;
+    const email = normalizeEmail(rawEmail);
+    const username = normalizeUsername(rawUsername);
+    const normalizedFullName =
+      typeof fullName === "string" ? fullName.trim() : "";
 
     // 2. validation - not empty
     if (
-      [fullName, email, username, password].some(
+      [normalizedFullName, email, username, password].some(
         (field) => field?.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
@@ -144,12 +160,12 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 
     const user = await User.create({
-      fullName,
+      fullName: normalizedFullName,
       avatar: avatar?.url || "",
       coverImage: coverImage?.url || "",
       email,
       password,
-      username: username.toLowerCase(),
+      username,
       role
     });
 
@@ -163,14 +179,30 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  const { email, username, password, adminAccessKey } = req.body;
+  const {
+    email: rawEmail,
+    username: rawUsername,
+    password,
+    adminAccessKey
+  } = req.body;
+  const email = normalizeEmail(rawEmail);
+  const username = normalizeUsername(rawUsername);
+  const loginFilters = [];
+
+  if (email) {
+    loginFilters.push({ email });
+  }
+
+  if (username) {
+    loginFilters.push({ username });
+  }
 
   // Admin login with key
   if (adminAccessKey) {
     if (adminAccessKey !== ADMIN_ACCESS_KEY) {
       throw new ApiError(401, "Invalid admin access key");
     }
-    const adminUser = await User.findOne({ $or: [{ email }, { username }] });
+    const adminUser = await User.findOne({ $or: loginFilters });
     if (adminUser && adminUser.role === 'admin') {
       // Already admin
     } else {
@@ -181,13 +213,13 @@ const loginUser = asyncHandler(async (req, res) => {
   console.log("📩 Login Body:", req.body);
 
   // ✅ validation
-  if (!email && !username) {
+  if (loginFilters.length === 0) {
     throw new ApiError(400, "Email or username required");
   }
 
   // ✅ find user
   const user = await User.findOne({
-    $or: [{ email }, { username }],
+    $or: loginFilters,
   });
 
   console.log("👤 User found:", user);

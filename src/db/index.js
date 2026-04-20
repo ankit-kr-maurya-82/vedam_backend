@@ -14,6 +14,19 @@ const connectDB = async () => {
     throw new Error("MONGODB_URI is not set in environment");
   }
 
+  try {
+    const parsedUri = new URL(process.env.MONGODB_URI);
+    const databaseName = parsedUri.pathname?.replace(/^\//, "");
+
+    if (!databaseName) {
+      console.warn(
+        "MONGODB_URI does not include a database name. MongoDB will use the default database, which can make existing users appear missing."
+      );
+    }
+  } catch {
+    console.warn("Unable to parse MONGODB_URI for database-name validation.");
+  }
+
   pendingConnection = mongoose
 .connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 30000,
@@ -23,7 +36,7 @@ const connectDB = async () => {
     .then((connectionInstance) => {
       cachedConnection = connectionInstance;
       console.log(
-        `MongoDB connected. DB HOST: ${connectionInstance.connection.host}`
+        `MongoDB connected. DB HOST: ${connectionInstance.connection.host}, DB NAME: ${connectionInstance.connection.name}`
       );
       return connectionInstance;
     })
