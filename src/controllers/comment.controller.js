@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Comment } from "../models/comment.model.js";
 import { Post } from "../models/post.model.js";
+import { User } from "../models/user.model.js";
 
 /* =========================
    ✅ CREATE COMMENT
@@ -52,10 +53,37 @@ const getCommentsByPost = asyncHandler(async (req, res) => {
 const getCommentsList = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query;
   const skip = (page - 1) * limit;
+  const normalizedSearch = String(search || "").trim();
+  let filter = {};
 
-  const filter = search
-    ? { content: { $regex: search, $options: "i" } }
-    : {};
+  if (normalizedSearch) {
+    const [matchingUsers, matchingPosts] = await Promise.all([
+      User.find({
+        $or: [
+          { username: { $regex: normalizedSearch, $options: "i" } },
+          { fullName: { $regex: normalizedSearch, $options: "i" } },
+        ],
+      }).select("_id"),
+      Post.find({
+        title: { $regex: normalizedSearch, $options: "i" },
+      }).select("_id"),
+    ]);
+
+    const matchingOwnerIds = matchingUsers.map((user) => user._id);
+    const matchingPostIds = matchingPosts.map((post) => post._id);
+
+    filter = {
+      $or: [
+        { content: { $regex: normalizedSearch, $options: "i" } },
+        ...(matchingOwnerIds.length > 0
+          ? [{ owner: { $in: matchingOwnerIds } }]
+          : []),
+        ...(matchingPostIds.length > 0
+          ? [{ post: { $in: matchingPostIds } }]
+          : []),
+      ],
+    };
+  }
 
   const [comments, total] = await Promise.all([
     Comment.find(filter)
@@ -84,7 +112,7 @@ const getCommentsList = asyncHandler(async (req, res) => {
    ✅ DELETE COMMENT (SECURE)
 ========================= */
 const deleteComment = asyncHandler(async (req, res) => {
-  const { commentId } = req.params;
+  const commentId = req.params.commentId || req.params.id;
 
   const comment = await Comment.findById(commentId);
 

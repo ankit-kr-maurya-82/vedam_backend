@@ -6,10 +6,23 @@ import { Post } from "../models/post.model.js";
 import { Comment } from "../models/comment.model.js";
 
 const getAdminStats = asyncHandler(async (req, res) => {
-  const [userCount, postCount, commentCount] = await Promise.all([
+  const [userCount, postCount, commentCount, likesAggregate] = await Promise.all([
     User.countDocuments(),
     Post.countDocuments(),
-    Comment.countDocuments()
+    Comment.countDocuments(),
+    Post.aggregate([
+      {
+        $project: {
+          likesCount: { $size: { $ifNull: ["$likes", []] } },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalLikes: { $sum: "$likesCount" },
+        },
+      },
+    ]),
   ]);
 
   const recentUsers = await User.find()
@@ -28,6 +41,7 @@ const getAdminStats = asyncHandler(async (req, res) => {
       totalUsers: userCount,
       totalPosts: postCount,
       totalComments: commentCount,
+      totalLikes: likesAggregate[0]?.totalLikes || 0,
       recentUsers,
       recentPosts
     })
@@ -109,10 +123,29 @@ const deleteUser = asyncHandler(async (req, res) => {
 const getPostsList = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query;
   const skip = (page - 1) * limit;
+  const normalizedSearch = String(search || "").trim();
+  let filter = {};
 
-  const filter = search 
-    ? { title: { $regex: search, $options: 'i' } }
-    : {};
+  if (normalizedSearch) {
+    const matchingUsers = await User.find({
+      $or: [
+        { username: { $regex: normalizedSearch, $options: "i" } },
+        { fullName: { $regex: normalizedSearch, $options: "i" } },
+      ],
+    }).select("_id");
+
+    const matchingOwnerIds = matchingUsers.map((user) => user._id);
+
+    filter = {
+      $or: [
+        { title: { $regex: normalizedSearch, $options: "i" } },
+        { content: { $regex: normalizedSearch, $options: "i" } },
+        ...(matchingOwnerIds.length > 0
+          ? [{ owner: { $in: matchingOwnerIds } }]
+          : []),
+      ],
+    };
+  }
 
   const [posts, total] = await Promise.all([
     Post.find(filter)
