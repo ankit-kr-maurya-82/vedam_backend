@@ -1,12 +1,8 @@
 import "dotenv/config";
-import { fileURLToPath } from "url";
 import { app } from "./app.js";
 import connectMongo from "./db/index.js";
 
 const isServerless = Boolean(process.env.VERCEL);
-const isDirectRun =
-  Boolean(process.argv[1]) &&
-  fileURLToPath(import.meta.url) === process.argv[1];
 
 // In serverless mode we log startup/runtime failures instead of terminating
 // the process, so Vercel can return a normal HTTP response.
@@ -34,21 +30,8 @@ const startServer = async () => {
   }
 };
 
-if (isDirectRun && !isServerless) {
+if (!isServerless) {
   startServer();
-}
-
-export default async function handler(req, res) {
-  try {
-    await connectMongo();
-    return app(req, res);
-  } catch (err) {
-    console.error("Request bootstrap failed:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Server initialization failed",
-    });
-  }
 }
 
 export { app, startServer };
