@@ -5,6 +5,16 @@ import { User } from "../models/user.model.js";
 import { Post } from "../models/post.model.js";
 import { Comment } from "../models/comment.model.js";
 
+const parseAdminListQuery = (pageValue, limitValue) => {
+  const page = Math.max(Number.parseInt(pageValue, 10) || 1, 1);
+  const normalizedLimit = String(limitValue ?? 10).trim().toLowerCase();
+  const shouldReturnAll = normalizedLimit === "all";
+  const limit = shouldReturnAll ? null : Math.max(Number.parseInt(limitValue, 10) || 10, 1);
+  const skip = shouldReturnAll ? 0 : (page - 1) * limit;
+
+  return { page, limit, skip, shouldReturnAll };
+};
+
 const getAdminStats = asyncHandler(async (req, res) => {
   const [userCount, postCount, commentCount, likesAggregate] = await Promise.all([
     User.countDocuments(),
@@ -50,7 +60,10 @@ const getAdminStats = asyncHandler(async (req, res) => {
 
 const getUsersList = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query;
-  const skip = (page - 1) * limit;
+  const { page: currentPage, limit: currentLimit, skip, shouldReturnAll } = parseAdminListQuery(
+    page,
+    limit
+  );
 
   const filter = search 
     ? {
@@ -62,23 +75,25 @@ const getUsersList = asyncHandler(async (req, res) => {
       }
     : {};
 
-  const [users, total] = await Promise.all([
-    User.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .select("-password -refreshToken"),
-    User.countDocuments(filter)
-  ]);
+  const usersQuery = User.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .select("-password -refreshToken");
+
+  if (!shouldReturnAll) {
+    usersQuery.limit(currentLimit);
+  }
+
+  const [users, total] = await Promise.all([usersQuery, User.countDocuments(filter)]);
 
   return res.json(
     new ApiResponse(200, {
       users,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: currentPage,
+        limit: shouldReturnAll ? total : currentLimit,
         total,
-        pages: Math.ceil(total / limit)
+        pages: shouldReturnAll ? (total > 0 ? 1 : 0) : Math.ceil(total / currentLimit)
       }
     })
   );
@@ -122,7 +137,10 @@ const deleteUser = asyncHandler(async (req, res) => {
 
 const getPostsList = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query;
-  const skip = (page - 1) * limit;
+  const { page: currentPage, limit: currentLimit, skip, shouldReturnAll } = parseAdminListQuery(
+    page,
+    limit
+  );
   const normalizedSearch = String(search || "").trim();
   let filter = {};
 
@@ -147,23 +165,25 @@ const getPostsList = asyncHandler(async (req, res) => {
     };
   }
 
-  const [posts, total] = await Promise.all([
-    Post.find(filter)
-      .populate("owner", "username fullName")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit)),
-    Post.countDocuments(filter)
-  ]);
+  const postsQuery = Post.find(filter)
+    .populate("owner", "username fullName")
+    .sort({ createdAt: -1 })
+    .skip(skip);
+
+  if (!shouldReturnAll) {
+    postsQuery.limit(currentLimit);
+  }
+
+  const [posts, total] = await Promise.all([postsQuery, Post.countDocuments(filter)]);
 
   return res.json(
     new ApiResponse(200, {
       posts,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: currentPage,
+        limit: shouldReturnAll ? total : currentLimit,
         total,
-        pages: Math.ceil(total / limit)
+        pages: shouldReturnAll ? (total > 0 ? 1 : 0) : Math.ceil(total / currentLimit)
       }
     })
   );

@@ -5,6 +5,16 @@ import { Comment } from "../models/comment.model.js";
 import { Post } from "../models/post.model.js";
 import { User } from "../models/user.model.js";
 
+const parseAdminListQuery = (pageValue, limitValue) => {
+  const page = Math.max(Number.parseInt(pageValue, 10) || 1, 1);
+  const normalizedLimit = String(limitValue ?? 10).trim().toLowerCase();
+  const shouldReturnAll = normalizedLimit === "all";
+  const limit = shouldReturnAll ? null : Math.max(Number.parseInt(limitValue, 10) || 10, 1);
+  const skip = shouldReturnAll ? 0 : (page - 1) * limit;
+
+  return { page, limit, skip, shouldReturnAll };
+};
+
 /* =========================
    ✅ CREATE COMMENT
 ========================= */
@@ -52,7 +62,10 @@ const getCommentsByPost = asyncHandler(async (req, res) => {
 ========================= */
 const getCommentsList = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query;
-  const skip = (page - 1) * limit;
+  const { page: currentPage, limit: currentLimit, skip, shouldReturnAll } = parseAdminListQuery(
+    page,
+    limit
+  );
   const normalizedSearch = String(search || "").trim();
   let filter = {};
 
@@ -85,24 +98,26 @@ const getCommentsList = asyncHandler(async (req, res) => {
     };
   }
 
-  const [comments, total] = await Promise.all([
-    Comment.find(filter)
-      .populate("owner", "username fullName")
-      .populate("post", "title")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit)),
-    Comment.countDocuments(filter),
-  ]);
+  const commentsQuery = Comment.find(filter)
+    .populate("owner", "username fullName")
+    .populate("post", "title")
+    .sort({ createdAt: -1 })
+    .skip(skip);
+
+  if (!shouldReturnAll) {
+    commentsQuery.limit(currentLimit);
+  }
+
+  const [comments, total] = await Promise.all([commentsQuery, Comment.countDocuments(filter)]);
 
   return res.json(
     new ApiResponse(200, {
       comments,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: currentPage,
+        limit: shouldReturnAll ? total : currentLimit,
         total,
-        pages: Math.ceil(total / limit),
+        pages: shouldReturnAll ? (total > 0 ? 1 : 0) : Math.ceil(total / currentLimit),
       },
     })
   );
