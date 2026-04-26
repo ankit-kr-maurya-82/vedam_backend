@@ -6,6 +6,7 @@ import {
   getAllPosts,
   getPostById,
   getPostsByUsername,
+  incrementPostViews,
   toggleLikePost,
   updatePost,
 } from "../controllers/post.controller.js";
@@ -16,6 +17,7 @@ const router = Router();
 router.get("/", optionalVerifyJWT, getAllPosts);
 router.get("/:postId", optionalVerifyJWT, getPostById);
 router.get("/user/:username", optionalVerifyJWT, getPostsByUsername);
+router.post("/:postId/view", optionalVerifyJWT, incrementPostViews);
 
 router.post(
   "/",

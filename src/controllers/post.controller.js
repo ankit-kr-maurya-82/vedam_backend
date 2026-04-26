@@ -43,6 +43,7 @@ const normalizePost = (post, currentUserId = null) => {
     ? likeIds.some((likeId) => String(likeId) === normalizedCurrentUserId)
     : false,
   commentsCount: post.commentsCount || 0,
+  views: post.views || 0,
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
   };
@@ -107,7 +108,7 @@ export const getAllPosts = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
-    .select("title content media owner likes commentsCount createdAt updatedAt")
+    .select("title content media owner likes commentsCount views createdAt updatedAt")
     .populate("owner", "fullName username avatar")
     .lean();
 
@@ -166,6 +167,27 @@ export const getPostById = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
   const post = await Post.findById(postId)
+    .populate("owner", "fullName username avatar")
+    .lean();
+
+  if (!post) {
+    throw new ApiError(404, "Post not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    post: normalizePost(post, req.user?._id),
+  });
+});
+
+export const incrementPostViews = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+
+  const post = await Post.findByIdAndUpdate(
+    postId,
+    { $inc: { views: 1 } },
+    { new: true }
+  )
     .populate("owner", "fullName username avatar")
     .lean();
 
