@@ -16,8 +16,17 @@ const parseAdminListQuery = (pageValue, limitValue) => {
 };
 
 const getAdminStats = asyncHandler(async (req, res) => {
-  const [userCount, postCount, commentCount, likesAggregate] = await Promise.all([
+  const [
+    userCount,
+    adminCount,
+    postCount,
+    commentCount,
+    likesAggregate,
+    viewsAggregate,
+    commentedPostIds,
+  ] = await Promise.all([
     User.countDocuments(),
+    User.countDocuments({ role: "admin" }),
     Post.countDocuments(),
     Comment.countDocuments(),
     Post.aggregate([
@@ -33,27 +42,57 @@ const getAdminStats = asyncHandler(async (req, res) => {
         },
       },
     ]),
+    Post.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalViews: { $sum: { $ifNull: ["$views", 0] } },
+        },
+      },
+    ]),
+    Comment.distinct("post"),
   ]);
 
-  const recentUsers = await User.find()
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .select("username email fullName avatar createdAt");
+  const [recentUsers, recentPosts, recentComments] = await Promise.all([
+    User.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("username email fullName avatar createdAt role"),
+    Post.find()
+      .populate("owner", "username fullName avatar")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("title content owner createdAt likes commentsCount views"),
+    Comment.find()
+      .populate("owner", "username fullName avatar")
+      .populate("post", "title")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("content owner post createdAt"),
+  ]);
 
-  const recentPosts = await Post.find()
-    .populate("owner", "username fullName avatar")
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .select("title content owner createdAt");
+  const totalLikes = likesAggregate[0]?.totalLikes || 0;
+  const totalViews = viewsAggregate[0]?.totalViews || 0;
+  const standardUsers = Math.max(userCount - adminCount, 0);
+  const postsWithComments = commentedPostIds.length;
+  const avgLikesPerPost = postCount ? Number((totalLikes / postCount).toFixed(1)) : 0;
+  const avgCommentsPerPost = postCount ? Number((commentCount / postCount).toFixed(1)) : 0;
 
   return res.json(
     new ApiResponse(200, {
       totalUsers: userCount,
+      adminUsers: adminCount,
+      standardUsers,
       totalPosts: postCount,
       totalComments: commentCount,
-      totalLikes: likesAggregate[0]?.totalLikes || 0,
+      totalLikes,
+      totalViews,
+      postsWithComments,
+      avgLikesPerPost,
+      avgCommentsPerPost,
       recentUsers,
-      recentPosts
+      recentPosts,
+      recentComments,
     })
   );
 });
