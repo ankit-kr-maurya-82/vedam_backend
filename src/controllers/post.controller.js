@@ -15,6 +15,32 @@ const resolveMediaUrl = (mediaPath) => {
   return null;
 };
 
+const serializeViewerList = (viewers = []) =>
+  viewers
+    .map((entry) => {
+      const user = entry?.user;
+      const userId = user?._id ? String(user._id) : user ? String(user) : null;
+
+      if (!userId) {
+        return null;
+      }
+
+      return {
+        id: userId,
+        userId,
+        username: user?.username || "unknown_user",
+        fullName: user?.fullName || "Unknown User",
+        avatar: user?.avatar || "",
+        viewedAt: entry?.viewedAt || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      const leftTime = left.viewedAt ? new Date(left.viewedAt).getTime() : 0;
+      const rightTime = right.viewedAt ? new Date(right.viewedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+
 // ✅ normalize response
 const normalizePost = (post, currentUserId = null) => {
   const likeIds = Array.isArray(post.likes) ? post.likes : [];
@@ -168,36 +194,69 @@ export const getPostById = asyncHandler(async (req, res) => {
 
   const post = await Post.findById(postId)
     .populate("owner", "fullName username avatar")
+    .populate("viewers.user", "fullName username avatar")
     .lean();
 
   if (!post) {
     throw new ApiError(404, "Post not found");
   }
 
+  const normalizedPost = normalizePost(post, req.user?._id);
+  const requesterId = req.user?._id ? String(req.user._id) : null;
+  const ownerId = post.owner?._id ? String(post.owner._id) : String(post.owner);
+
+  if (requesterId && requesterId === ownerId) {
+    normalizedPost.viewers = serializeViewerList(post.viewers);
+  }
+
   res.status(200).json({
     success: true,
-    post: normalizePost(post, req.user?._id),
+    post: normalizedPost,
   });
 });
 
 export const incrementPostViews = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
-  const post = await Post.findByIdAndUpdate(
-    postId,
-    { $inc: { views: 1 } },
-    { new: true }
-  )
-    .populate("owner", "fullName username avatar")
-    .lean();
+  const post = await Post.findById(postId);
 
   if (!post) {
     throw new ApiError(404, "Post not found");
   }
 
+  post.views += 1;
+
+  const viewerId = req.user?._id ? String(req.user._id) : null;
+  const ownerId = String(post.owner);
+
+  if (viewerId && viewerId !== ownerId) {
+    if (!Array.isArray(post.viewers)) {
+      post.viewers = [];
+    }
+
+    const existingViewer = post.viewers.find(
+      (entry) => String(entry.user) === viewerId
+    );
+
+    if (existingViewer) {
+      existingViewer.viewedAt = new Date();
+    } else {
+      post.viewers.push({
+        user: req.user._id,
+        viewedAt: new Date(),
+      });
+    }
+  }
+
+  await post.save();
+
+  const populatedPost = await Post.findById(postId)
+    .populate("owner", "fullName username avatar")
+    .lean();
+
   res.status(200).json({
     success: true,
-    post: normalizePost(post, req.user?._id),
+    post: normalizePost(populatedPost, req.user?._id),
   });
 });
 

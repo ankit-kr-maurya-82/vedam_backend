@@ -38,6 +38,19 @@ const postSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    viewers: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        viewedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     isAdminOnly: {
       type: Boolean,
       default: false
