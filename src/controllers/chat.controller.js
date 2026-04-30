@@ -2,6 +2,7 @@ import { DirectMessage } from "../models/DirectMessage.model.js";
 import { Notification } from "../models/Notification.model.js";
 import { User } from "../models/user.model.js";
 import { addChatStream, emitChatEvent } from "../utils/chatEvents.js";
+import { emitSocketChatEvent } from "../sockets/chat.socket.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -335,6 +336,8 @@ const sendConversationMessage = asyncHandler(async (req, res) => {
 
   emitChatEvent(contact._id, "chat-message", receiverPayload);
   emitChatEvent(req.user._id, "chat-message", senderPayload);
+  emitSocketChatEvent(contact._id, receiverPayload);
+  emitSocketChatEvent(req.user._id, senderPayload);
 
   return res.status(201).json(
     new ApiResponse(

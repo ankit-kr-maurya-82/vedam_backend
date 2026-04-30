@@ -1,6 +1,8 @@
 import "dotenv/config";
-import { app } from "./app.js";
+import http from "http";
+import { allowedOrigins, app } from "./app.js";
 import connectMongo from "./db/index.js";
+import { initSocketIO } from "./sockets/chat.socket.js";
 
 const isServerless = Boolean(process.env.VERCEL);
 
@@ -21,7 +23,10 @@ const startServer = async () => {
     await connectMongo();
 
     const PORT = process.env.PORT || 8000;
-    return app.listen(PORT, () => {
+    const httpServer = http.createServer(app);
+    initSocketIO(httpServer, allowedOrigins);
+
+    return httpServer.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });
   } catch (err) {
