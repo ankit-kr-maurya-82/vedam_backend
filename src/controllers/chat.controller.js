@@ -3,6 +3,7 @@ import { Notification } from "../models/Notification.model.js";
 import { User } from "../models/user.model.js";
 import { addChatStream, emitChatEvent } from "../utils/chatEvents.js";
 import { emitSocketChatEvent } from "../sockets/chat.socket.js";
+import { sendPushNotificationToUser } from "../utils/pushNotifications.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -348,6 +349,21 @@ const sendConversationMessage = asyncHandler(async (req, res) => {
     link: `/chat?user=${req.user.username}`,
   }).catch((error) => {
     console.error("Chat notification create failed:", error.message);
+  });
+
+  void sendPushNotificationToUser(contact._id, {
+    title: req.user.fullName || req.user.username || "New message",
+    body: content,
+    icon: req.user.avatar || "",
+    tag: `chat:${currentUserId}`,
+    data: {
+      url: `/chat?user=${req.user.username}`,
+      contactUsername: req.user.username,
+      senderId: currentUserId,
+      messageId: senderSerializedMessage.id,
+    },
+  }).catch((error) => {
+    console.error("Chat push notification failed:", error.message);
   });
 
   return res.status(201).json(
