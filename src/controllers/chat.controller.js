@@ -47,9 +47,60 @@ const serializeMessage = (message, currentUserId) => {
     createdAt: message?.createdAt || null,
     updatedAt: message?.updatedAt || null,
     readAt: message?.readAt || null,
+    editedAt: message?.editedAt || null,
+    isEdited: Boolean(message?.editedAt),
     isOwn: senderId === currentUserId,
   };
 };
+
+const getConversationFilter = (leftUserId, rightUserId) => ({
+  $or: [
+    {
+      senderId: leftUserId,
+      receiverId: rightUserId,
+    },
+    {
+      senderId: rightUserId,
+      receiverId: leftUserId,
+    },
+  ],
+});
+
+const getLatestConversationMessage = async (leftUserId, rightUserId) =>
+  DirectMessage.findOne(getConversationFilter(leftUserId, rightUserId))
+    .sort({ createdAt: -1 })
+    .populate("senderId", "username fullName avatar bio")
+    .populate("receiverId", "username fullName avatar bio");
+
+const buildConversationEventPayloads = ({
+  eventType,
+  currentUser,
+  contact,
+  senderMessage = null,
+  receiverMessage = null,
+  senderLatestMessage = null,
+  receiverLatestMessage = null,
+  deletedMessageId = null,
+}) => ({
+  receiverPayload: {
+    type: eventType,
+    contact: serializeContact(currentUser, contact),
+    ...(receiverMessage ? { message: receiverMessage } : {}),
+    ...(receiverLatestMessage !== undefined
+      ? { latestMessage: receiverLatestMessage }
+      : {}),
+    ...(deletedMessageId ? { deletedMessageId } : {}),
+  },
+  senderPayload: {
+    type: eventType,
+    contact: serializeContact(contact, currentUser),
+    ...(senderMessage ? { message: senderMessage } : {}),
+    ...(senderLatestMessage !== undefined
+      ? { latestMessage: senderLatestMessage }
+      : {}),
+    ...(deletedMessageId ? { deletedMessageId } : {}),
+  },
+});
 
 const getConversationContactId = (message, currentUserId) => {
   const senderId = String(message?.senderId?._id || message?.senderId || "");
@@ -324,18 +375,17 @@ const sendConversationMessage = asyncHandler(async (req, res) => {
     realtimeMessage,
     String(contact._id)
   );
-  const receiverPayload = {
-    type: "chat:message",
-    contact: serializeContact(req.user, contact),
-    message: receiverSerializedMessage,
-    unread: true,
-  };
-  const senderPayload = {
-    type: "chat:message",
-    contact: serializeContact(contact, req.user),
-    message: senderSerializedMessage,
-    unread: false,
-  };
+  const { receiverPayload, senderPayload } = buildConversationEventPayloads({
+    eventType: "chat:message",
+    currentUser: req.user,
+    contact,
+    senderMessage: senderSerializedMessage,
+    receiverMessage: receiverSerializedMessage,
+    senderLatestMessage: senderSerializedMessage,
+    receiverLatestMessage: receiverSerializedMessage,
+  });
+  receiverPayload.unread = true;
+  senderPayload.unread = false;
 
   emitChatEvent(contact._id, "chat-message", receiverPayload);
   emitChatEvent(req.user._id, "chat-message", senderPayload);
@@ -378,9 +428,159 @@ const sendConversationMessage = asyncHandler(async (req, res) => {
   );
 });
 
+const updateConversationMessage = asyncHandler(async (req, res) => {
+  const username = String(req.params.username || "").trim().toLowerCase();
+  const messageId = String(req.params.messageId || "").trim();
+  const content = String(req.body.content || "").trim();
+  const currentUserId = String(req.user._id);
+
+  if (!username) {
+    throw new ApiError(400, "Username is required");
+  }
+
+  if (!messageId) {
+    throw new ApiError(400, "Message ID is required");
+  }
+
+  if (!content) {
+    throw new ApiError(400, "Message content is required");
+  }
+
+  const contact = await User.findOne({
+    username,
+    _id: { $ne: req.user._id },
+  }).select("username fullName avatar bio");
+
+  if (!contact) {
+    throw new ApiError(404, "Chat user not found");
+  }
+
+  const message = await DirectMessage.findOne({
+    _id: messageId,
+    senderId: req.user._id,
+    receiverId: contact._id,
+  })
+    .populate("senderId", "username fullName avatar bio")
+    .populate("receiverId", "username fullName avatar bio");
+
+  if (!message) {
+    throw new ApiError(404, "Message not found");
+  }
+
+  message.content = content;
+  message.editedAt = new Date();
+  await message.save();
+
+  const latestMessage = await getLatestConversationMessage(req.user._id, contact._id);
+  const senderSerializedMessage = serializeMessage(message, currentUserId);
+  const receiverSerializedMessage = serializeMessage(message, String(contact._id));
+  const senderLatestMessage = latestMessage
+    ? serializeMessage(latestMessage, currentUserId)
+    : null;
+  const receiverLatestMessage = latestMessage
+    ? serializeMessage(latestMessage, String(contact._id))
+    : null;
+
+  const { receiverPayload, senderPayload } = buildConversationEventPayloads({
+    eventType: "chat:message-updated",
+    currentUser: req.user,
+    contact,
+    senderMessage: senderSerializedMessage,
+    receiverMessage: receiverSerializedMessage,
+    senderLatestMessage,
+    receiverLatestMessage,
+  });
+
+  emitChatEvent(contact._id, "chat-message", receiverPayload);
+  emitChatEvent(req.user._id, "chat-message", senderPayload);
+  emitSocketChatEvent(contact._id, receiverPayload);
+  emitSocketChatEvent(req.user._id, senderPayload);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        contact: serializeContact(contact, req.user),
+        message: senderSerializedMessage,
+        latestMessage: senderLatestMessage,
+      },
+      "Message updated successfully"
+    )
+  );
+});
+
+const deleteConversationMessage = asyncHandler(async (req, res) => {
+  const username = String(req.params.username || "").trim().toLowerCase();
+  const messageId = String(req.params.messageId || "").trim();
+  const currentUserId = String(req.user._id);
+
+  if (!username) {
+    throw new ApiError(400, "Username is required");
+  }
+
+  if (!messageId) {
+    throw new ApiError(400, "Message ID is required");
+  }
+
+  const contact = await User.findOne({
+    username,
+    _id: { $ne: req.user._id },
+  }).select("username fullName avatar bio");
+
+  if (!contact) {
+    throw new ApiError(404, "Chat user not found");
+  }
+
+  const deletedMessage = await DirectMessage.findOneAndDelete({
+    _id: messageId,
+    senderId: req.user._id,
+    receiverId: contact._id,
+  });
+
+  if (!deletedMessage) {
+    throw new ApiError(404, "Message not found");
+  }
+
+  const latestMessage = await getLatestConversationMessage(req.user._id, contact._id);
+  const senderLatestMessage = latestMessage
+    ? serializeMessage(latestMessage, currentUserId)
+    : null;
+  const receiverLatestMessage = latestMessage
+    ? serializeMessage(latestMessage, String(contact._id))
+    : null;
+
+  const { receiverPayload, senderPayload } = buildConversationEventPayloads({
+    eventType: "chat:message-deleted",
+    currentUser: req.user,
+    contact,
+    senderLatestMessage,
+    receiverLatestMessage,
+    deletedMessageId: messageId,
+  });
+
+  emitChatEvent(contact._id, "chat-message", receiverPayload);
+  emitChatEvent(req.user._id, "chat-message", senderPayload);
+  emitSocketChatEvent(contact._id, receiverPayload);
+  emitSocketChatEvent(req.user._id, senderPayload);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        contact: serializeContact(contact, req.user),
+        deletedMessageId: messageId,
+        latestMessage: senderLatestMessage,
+      },
+      "Message deleted successfully"
+    )
+  );
+});
+
 export {
   getChatConversations,
   streamChatEvents,
   getConversationMessages,
   sendConversationMessage,
+  updateConversationMessage,
+  deleteConversationMessage,
 };

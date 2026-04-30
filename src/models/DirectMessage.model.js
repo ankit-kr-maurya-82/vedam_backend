@@ -24,6 +24,10 @@ const directMessageSchema = new Schema(
       type: Date,
       default: null,
     },
+    editedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
