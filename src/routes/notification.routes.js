@@ -1,12 +1,13 @@
-import express from "express"
-import auth from "../middlewares/auth.middleware.js";
-import { getNotifications, markAsRead } from "../controllers/notification.controller";
+import { Router } from "express";
+import {
+  getNotifications,
+  markAsRead,
+} from "../controllers/notification.controller.js";
+import { verifyJWT } from "../middlewares/auth.middleware.js";
 
+const router = Router();
 
+router.get("/", verifyJWT, getNotifications);
+router.patch("/:id/read", verifyJWT, markAsRead);
 
-const router = express.Router();
-
-router.get("/", auth, getNotifications);
-router.patch("/:id/read", auth, markAsRead);
-
-export default router
+export default router;

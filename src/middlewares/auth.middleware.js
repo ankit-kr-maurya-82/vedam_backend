@@ -7,7 +7,8 @@ import { User } from "../models/user.model.js";
 export const verifyJWT = asyncHandler(async (req, res, next) => {
   const token =
     req.cookies?.accessToken ||
-    req.headers.authorization?.split(" ")[1];
+    req.headers.authorization?.split(" ")[1] ||
+    req.query?.accessToken;
 
   if (!token) {
     throw new ApiError(401, "Access token missing");
@@ -37,7 +38,8 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
 export const optionalVerifyJWT = asyncHandler(async (req, res, next) => {
   const token =
     req.cookies?.accessToken ||
-    req.headers.authorization?.split(" ")[1];
+    req.headers.authorization?.split(" ")[1] ||
+    req.query?.accessToken;
 
   if (!token) return next();
 
