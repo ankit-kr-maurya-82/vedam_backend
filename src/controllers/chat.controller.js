@@ -309,28 +309,30 @@ const sendConversationMessage = asyncHandler(async (req, res) => {
     content,
   });
 
-  const populatedMessage = await DirectMessage.findById(message._id)
-    .populate("senderId", "username fullName avatar bio")
-    .populate("receiverId", "username fullName avatar bio");
-
-  await Notification.create({
-    userId: contact._id,
-    type: "MESSAGE",
-    content: `${req.user.fullName || req.user.username} sent you a message`,
-    link: `/chat?user=${req.user.username}`,
-  });
-
-  const serializedMessage = serializeMessage(populatedMessage, currentUserId);
+  const realtimeMessage = {
+    _id: message._id,
+    content,
+    senderId: req.user,
+    receiverId: contact,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    readAt: message.readAt,
+  };
+  const senderSerializedMessage = serializeMessage(realtimeMessage, currentUserId);
+  const receiverSerializedMessage = serializeMessage(
+    realtimeMessage,
+    String(contact._id)
+  );
   const receiverPayload = {
     type: "chat:message",
     contact: serializeContact(req.user, contact),
-    message: serializedMessage,
+    message: receiverSerializedMessage,
     unread: true,
   };
   const senderPayload = {
     type: "chat:message",
     contact: serializeContact(contact, req.user),
-    message: serializedMessage,
+    message: senderSerializedMessage,
     unread: false,
   };
 
@@ -339,12 +341,21 @@ const sendConversationMessage = asyncHandler(async (req, res) => {
   emitSocketChatEvent(contact._id, receiverPayload);
   emitSocketChatEvent(req.user._id, senderPayload);
 
+  void Notification.create({
+    userId: contact._id,
+    type: "MESSAGE",
+    content: `${req.user.fullName || req.user.username} sent you a message`,
+    link: `/chat?user=${req.user.username}`,
+  }).catch((error) => {
+    console.error("Chat notification create failed:", error.message);
+  });
+
   return res.status(201).json(
     new ApiResponse(
       201,
       {
         contact: serializeContact(contact, req.user),
-        message: serializedMessage,
+        message: senderSerializedMessage,
       },
       "Message sent successfully"
     )
