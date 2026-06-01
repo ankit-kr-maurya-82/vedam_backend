@@ -5,19 +5,39 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// Initialize Razorpay lazily
+const getRazorpayInstance = () => {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  // Check if credentials are configured (not placeholder values)
+  if (
+    !keyId ||
+    !keySecret ||
+    keyId === "your_razorpay_key_id" ||
+    keySecret === "your_razorpay_key_secret"
+  ) {
+    throw new ApiError(
+      503,
+      "Payment service not configured. Please set valid RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env"
+    );
+  }
+
+  return new Razorpay({
+    key_id: keyId,
+    key_secret: keySecret,
+  });
+};
 
 // Create payment order
 const createPaymentOrder = asyncHandler(async (req, res) => {
+  const razorpay = getRazorpayInstance();
   const { userId } = req.body;
 
   if (!userId) {
     throw new ApiError(400, "User ID is required");
   }
+
 
   const user = await User.findById(userId);
   if (!user) {
