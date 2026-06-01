@@ -465,15 +465,43 @@ const getPublicUserProfile = asyncHandler(async (req, res) => {
 
 const updateUserProfile = asyncHandler(async (req, res) => {
   console.log('🔄 [DEBUG] updateUserProfile called');
-  console.log('📋 Body:', req.body);
-  console.log('📁 File:', req.file ? {
-    originalname: req.file.originalname,
-    mimetype: req.file.mimetype,
-    size: req.file.size,
-    bufferLength: req.file.buffer?.length
-  } : 'NO FILE');
+  console.log('📋 Body (raw):', req.body);
+  console.log('📋 Body keys:', req.body && typeof req.body === 'object' ? Object.keys(req.body) : []);
+
+  const fileSummary = (() => {
+    if (req.file) {
+      return {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        bufferLength: req.file.buffer?.length,
+      };
+    }
+    if (req.files) {
+      const out = {};
+      for (const [k, v] of Object.entries(req.files)) {
+        out[k] = Array.isArray(v)
+          ? v.map((f) => ({ originalname: f.originalname, mimetype: f.mimetype, size: f.size }))
+          : v;
+      }
+      return out;
+    }
+    return 'NO FILE';
+  })();
+
+  console.log('📁 File:', fileSummary);
+
   const { fullName, username, bio } = req.body;
+  let { customization } = req.body;
   const updates = {};
+
+  if (typeof customization === "string") {
+    try {
+      customization = JSON.parse(customization);
+    } catch (_error) {
+      customization = null;
+    }
+  }
 
   if (typeof fullName === "string") {
     const trimmed = fullName.trim();
@@ -501,6 +529,10 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     updates.bio = bio.trim();
   }
 
+  if (typeof customization === "object" && customization !== null) {
+    updates.customization = customization;
+  }
+
   // ✅ MEMORY STORAGE FIX (IMPORTANT)
   const avatarFile = req.file;
 
@@ -521,7 +553,12 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   }
 
   if (Object.keys(updates).length === 0) {
-    throw new ApiError(400, "No profile changes provided");
+    // Helpful error when multipart/form-data arrives with no text updates
+    // but an avatar might still be expected.
+    throw new ApiError(
+      400,
+      "No profile changes provided (send at least fullName, username, bio, customization, or avatar)"
+    );
   }
 
   const updatedUser = await User.findByIdAndUpdate(

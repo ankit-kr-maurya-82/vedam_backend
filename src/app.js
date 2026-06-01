@@ -11,6 +11,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:8000",
   "https://vedam-frontend.vercel.app",
   "https://vedam-fronted.vercel.app",
   "https://vedam.vercel.app"

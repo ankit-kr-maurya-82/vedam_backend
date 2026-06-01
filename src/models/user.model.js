@@ -106,6 +106,21 @@ const userSchema = new Schema(
       trim: true,
       default: "",
     },
+    customization: {
+      accentColor: {
+        type: String,
+        default: "#3b82f6",
+      },
+      bannerUrl: {
+        type: String,
+        default: "",
+      },
+      layout: {
+        type: String,
+        enum: ["default", "compact", "editorial"],
+        default: "default",
+      },
+    },
   },
   {
     timestamps: true,
