@@ -638,6 +638,96 @@ const toggleFollowUser = asyncHandler(async (req, res) => {
   );
 });
 
+const getUserAnalytics = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Check if user has premium plan
+  if (user.subscription?.plan !== "premium" || !user.subscription?.isActive) {
+    throw new ApiError(403, "Premium subscription required");
+  }
+
+  // Get user's posts with full analytics
+  const { Post } = await import("../models/post.model.js");
+  
+  const posts = await Post.find({ owner: userId })
+    .select("title views likes commentsCount createdAt")
+    .lean();
+
+  // Calculate analytics
+  const totalViews = posts.reduce((sum, post) => sum + (post.views || 0), 0);
+  const totalLikes = posts.reduce((sum, post) => sum + (post.likes?.length || 0), 0);
+  const totalComments = posts.reduce((sum, post) => sum + (post.commentsCount || 0), 0);
+  const totalPosts = posts.length;
+
+  // Average engagement
+  const avgViews = totalPosts > 0 ? Math.round(totalViews / totalPosts) : 0;
+  const avgLikes = totalPosts > 0 ? Math.round(totalLikes / totalPosts) : 0;
+  const avgComments = totalPosts > 0 ? Math.round(totalComments / totalPosts) : 0;
+
+  // Engagement rate
+  const engagementRate = totalViews > 0 
+    ? Math.round((totalLikes + totalComments) / totalViews * 100) 
+    : 0;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        totalPosts,
+        totalViews,
+        totalLikes,
+        totalComments,
+        avgViews,
+        avgLikes,
+        avgComments,
+        engagementRate,
+        recentPosts: posts.slice(0, 5),
+        subscriptionPlan: user.subscription?.plan,
+        premiumSince: user.subscription?.startDate,
+      },
+      "Analytics retrieved successfully"
+    )
+  );
+});
+
+const upgradeToPremium = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const now = new Date();
+  const renewalDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+  await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        "subscription.plan": "premium",
+        "subscription.startDate": now,
+        "subscription.renewalDate": renewalDate,
+        "subscription.isActive": true,
+      },
+    },
+    { new: true }
+  );
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { plan: "premium", startDate: now, renewalDate },
+      "Upgraded to premium successfully"
+    )
+  );
+});
+
 export {
   registerUser,
   loginUser,
@@ -647,4 +737,6 @@ export {
   getPublicUserProfile,
   updateUserProfile,
   toggleFollowUser,
+  getUserAnalytics,
+  upgradeToPremium,
 };

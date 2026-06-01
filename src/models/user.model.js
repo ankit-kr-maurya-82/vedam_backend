@@ -84,6 +84,28 @@ const userSchema = new Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    subscription: {
+      plan: {
+        type: String,
+        enum: ["free", "premium"],
+        default: "free",
+      },
+      startDate: {
+        type: Date,
+      },
+      renewalDate: {
+        type: Date,
+      },
+      isActive: {
+        type: Boolean,
+        default: false,
+      },
+    },
+    profileUrl: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: true,

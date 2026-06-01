@@ -8,7 +8,9 @@ import {
   socialLoginUser,
   updateUserProfile,
   toggleFollowUser,
-  updateSelfRole
+  updateSelfRole,
+  getUserAnalytics,
+  upgradeToPremium,
 } from "../controllers/user.controller.js";
 
 import { upload } from "../middlewares/multer.middleware.js";
@@ -41,6 +43,12 @@ router.route("/profile").patch(
   upload.single("avatar"),
   updateUserProfile
 );
+
+// ✅ Get user analytics (premium required)
+router.route("/analytics").get(verifyJWT, getUserAnalytics);
+
+// ✅ Upgrade to premium
+router.route("/upgrade-premium").post(verifyJWT, upgradeToPremium);
 
 // ✅ Test upload
 router.route("/test-upload").post(
