@@ -15,8 +15,8 @@ const validateRazorpayCredentials = () => {
   if (
     !keyId ||
     !keySecret ||
-    keyId === "your_razorpay_key_id" ||
-    keySecret === "your_razorpay_key_secret"
+    keyId === RAZORPAY_KEY_ID ||
+    keySecret === RAZORPAY_KEY_SECRET
   ) {
     throw new ApiError(
       503,
