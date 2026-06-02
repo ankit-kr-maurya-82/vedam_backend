@@ -24,7 +24,15 @@ const startServer = async () => {
 
     const PORT = process.env.PORT || 8000;
     const httpServer = http.createServer(app);
-    initSocketIO(httpServer, allowedOrigins);
+    
+    // Only initialize Socket.IO in local mode (not on Vercel/serverless)
+    // Frontend will use polling + EventSource fallback on production
+    if (!isServerless) {
+      console.log("✅ Initializing Socket.IO (local mode)");
+      initSocketIO(httpServer, allowedOrigins);
+    } else {
+      console.log("⚠️  Socket.IO disabled on Vercel (using polling fallback)");
+    }
 
     return httpServer.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
