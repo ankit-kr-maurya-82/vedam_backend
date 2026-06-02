@@ -12,12 +12,12 @@ const validateRazorpayCredentials = () => {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
   // Check if credentials are configured (not placeholder values)
-  
+  // Compare against common example placeholders instead of undefined constants
   if (
     !keyId ||
     !keySecret ||
-    keyId === RAZORPAY_KEY_ID ||
-    keySecret === RAZORPAY_KEY_SECRET
+    keyId === "your_razorpay_key_id" ||
+    keySecret === "your_razorpay_key_secret"
   ) {
     throw new ApiError(
       503,
