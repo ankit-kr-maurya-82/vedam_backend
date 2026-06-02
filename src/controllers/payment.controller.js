@@ -41,12 +41,7 @@ const getRazorpayInstance = () => {
 // Create payment order
 const createPaymentOrder = asyncHandler(async (req, res) => {
   const razorpay = getRazorpayInstance();
-  const { userId } = req.body;
-
-  if (!userId) {
-    throw new ApiError(400, "User ID is required");
-  }
-
+  const userId = req.user._id;
 
   const user = await User.findById(userId);
   if (!user) {
@@ -91,15 +86,16 @@ const verifyPayment = asyncHandler(async (req, res) => {
     razorpay_order_id,
     razorpay_payment_id,
     razorpay_signature,
-    userId,
   } = req.body;
+
+  const userId = req.user._id;
 
   console.log("🔐 Payment Verification:", {
     razorpay_order_id: razorpay_order_id?.substring(0, 10),
-    userId: userId?.substring(0, 10),
+    userId: String(userId).substring(0, 10),
   });
 
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !userId) {
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     throw new ApiError(
       400,
       "Missing required payment verification fields"
