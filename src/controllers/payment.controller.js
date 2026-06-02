@@ -12,6 +12,7 @@ const validateRazorpayCredentials = () => {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
   // Check if credentials are configured (not placeholder values)
+  
   if (
     !keyId ||
     !keySecret ||
