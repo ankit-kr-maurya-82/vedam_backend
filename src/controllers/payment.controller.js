@@ -83,6 +83,11 @@ const verifyPayment = asyncHandler(async (req, res) => {
     userId,
   } = req.body;
 
+  console.log("🔐 Payment Verification:", {
+    razorpay_order_id: razorpay_order_id?.substring(0, 10),
+    userId: userId?.substring(0, 10),
+  });
+
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !userId) {
     throw new ApiError(
       400,
@@ -97,8 +102,11 @@ const verifyPayment = asyncHandler(async (req, res) => {
     .digest("hex");
 
   if (expectedSignature !== razorpay_signature) {
+    console.error("❌ Signature mismatch");
     throw new ApiError(400, "Payment signature verification failed");
   }
+
+  console.log("✅ Signature verified");
 
   // Update user subscription
   const now = new Date();
@@ -114,12 +122,19 @@ const verifyPayment = asyncHandler(async (req, res) => {
         "subscription.isActive": true,
       },
     },
-    { new: true }
+    { new: true, runValidators: true }
   ).select("-password -refreshToken");
 
   if (!updatedUser) {
+    console.error("❌ User not found or update failed:", userId);
     throw new ApiError(404, "User not found or update failed");
   }
+
+  console.log("✅ User subscription updated:", {
+    userId: updatedUser._id.toString().substring(0, 10),
+    plan: updatedUser.subscription?.plan,
+    isActive: updatedUser.subscription?.isActive,
+  });
 
   return res
     .status(200)
@@ -178,8 +193,12 @@ const handlePaymentWebhook = asyncHandler(async (req, res) => {
 const getRazorpayKey = asyncHandler(async (req, res) => {
   const key = process.env.RAZORPAY_KEY_ID;
 
-  if (!key) {
-    throw new ApiError(500, "Razorpay key not configured");
+  if (!key || key === "your_razorpay_key_id") {
+    console.error("❌ Razorpay key not configured. Set RAZORPAY_KEY_ID in .env");
+    throw new ApiError(
+      503,
+      "Payment service not configured. Please contact support."
+    );
   }
 
   return res
