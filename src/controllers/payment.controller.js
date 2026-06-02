@@ -50,7 +50,7 @@ const createPaymentOrder = asyncHandler(async (req, res) => {
   }
 
   const options = {
-    amount: 9900, // ₹99 in paise
+    amount: 100, // ₹99 in paise
     currency: "INR",
     receipt: `premium_${userId}_${Date.now()}`,
     notes: {
@@ -101,22 +101,25 @@ const verifyPayment = asyncHandler(async (req, res) => {
   }
 
   // Update user subscription
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
-
   const now = new Date();
   const renewalDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
 
-  user.subscription = {
-    plan: "premium",
-    startDate: now,
-    renewalDate: renewalDate,
-    isActive: true,
-  };
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        "subscription.plan": "premium",
+        "subscription.startDate": now,
+        "subscription.renewalDate": renewalDate,
+        "subscription.isActive": true,
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
 
-  await user.save();
+  if (!updatedUser) {
+    throw new ApiError(404, "User not found or update failed");
+  }
 
   return res
     .status(200)
@@ -124,7 +127,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
       new ApiResponse(
         200,
         {
-          user,
+          user: updatedUser,
           message: "Payment verified successfully. Premium subscription activated!",
         },
         "Payment verified and subscription updated"
