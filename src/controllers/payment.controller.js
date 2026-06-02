@@ -53,10 +53,12 @@ const createPaymentOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, "User is already a premium member");
   }
 
+  const receiptId = `premium_${String(userId).slice(-16)}_${Date.now().toString().slice(-6)}`;
+
   const options = {
     amount: 100, // ₹99 in paise
     currency: "INR",
-    receipt: `premium_${userId}_${Date.now()}`,
+    receipt: receiptId,
     notes: {
       userId: userId,
       username: user.username,
@@ -65,7 +67,21 @@ const createPaymentOrder = asyncHandler(async (req, res) => {
     },
   };
 
-  const order = await razorpay.orders.create(options);
+  let order;
+  try {
+    order = await razorpay.orders.create(options);
+  } catch (err) {
+    console.error("❌ Razorpay order creation failed", {
+      message: err.message,
+      statusCode: err.statusCode,
+      description: err.error?.description || err.error,
+      body: err.error?.metadata || err.error,
+    });
+    throw new ApiError(
+      err.statusCode || 502,
+      err.error?.description || err.message || "Failed to create Razorpay order"
+    );
+  }
 
   return res
     .status(201)
